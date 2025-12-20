@@ -28,9 +28,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        env:
+          # Dummy DATABASE_URL for Prisma schema validation during install
+          DATABASE_URL: postgresql://user:password@localhost:5432/dbname
 
       - name: Build all packages
         run: pnpm build
+        env:
+          # Required for build-time Prisma generation
+          DATABASE_URL: postgresql://user:password@localhost:5432/dbname
 
       - name: Check build artifacts
         run: |
