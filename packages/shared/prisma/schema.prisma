@@ -1,0 +1,502 @@
+// Prisma Schema for Isekai Backend
+// Migrated from Drizzle ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum DeviationStatus {
+  review
+  draft
+  scheduled
+  uploading
+  publishing
+  published
+  failed
+}
+
+enum UploadMode {
+  single
+  multiple
+}
+
+enum MatureLevel {
+  moderate
+  strict
+}
+
+enum TemplateType {
+  tag
+  description
+  comment
+}
+
+enum NoteFolderType {
+  inbox
+  unread
+  starred
+  spam
+  sent
+  drafts
+}
+
+enum SaleQueueStatus {
+  pending
+  processing
+  completed
+  failed
+  skipped
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+model User {
+  id                           String             @id @default(uuid())
+  deviantartId                 String             @unique @map("deviantart_id")
+  username                     String
+  avatarUrl                    String?            @map("avatar_url")
+  email                        String?
+  accessToken                  String             @map("access_token")
+  refreshToken                 String             @map("refresh_token")
+  tokenExpiresAt               DateTime           @map("token_expires_at")
+  refreshTokenExpiresAt        DateTime           @map("refresh_token_expires_at")
+  refreshTokenWarningEmailSent Boolean            @default(false) @map("refresh_token_warning_email_sent")
+  refreshTokenExpiredEmailSent Boolean            @default(false) @map("refresh_token_expired_email_sent")
+  lastRefreshTokenRefresh      DateTime?          @map("last_refresh_token_refresh")
+
+  // Timezone for scheduling
+  timezone String @default("UTC")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  deviations     Deviation[]
+  noteFolders    NoteFolder[]
+  noteLabels     NoteLabel[]
+  noteTemplates  NoteTemplate[]
+  templates      Template[]
+  apiKeys        ApiKey[]
+  galleriesCache GalleryCache[]
+  browseCache    BrowseCache[]
+  adminRoles     AdminRole[]
+  pricePresets   PricePreset[]
+  saleQueues     SaleQueue[]
+  automations    Automation[]
+
+  @@map("users")
+}
+
+model Deviation {
+  id     String          @id @default(uuid())
+  userId String          @map("user_id")
+  status DeviationStatus @default(draft)
+
+  // Metadata
+  title       String
+  description String?
+  tags        String[]
+  categoryPath String?  @map("category_path")
+  galleryIds   String[] @map("gallery_ids")
+  automationId String?  @map("automation_id") // Track which automation scheduled this deviation
+
+  // Settings
+  isMature          Boolean      @default(false) @map("is_mature")
+  matureLevel       MatureLevel? @map("mature_level")
+  allowComments     Boolean      @default(true) @map("allow_comments")
+  allowFreeDownload Boolean      @default(false) @map("allow_free_download")
+  isAiGenerated     Boolean      @default(false) @map("is_ai_generated")
+  noAi              Boolean      @default(false) @map("no_ai")
+  stashOnly         Boolean      @default(false) @map("stash_only")
+  addWatermark      Boolean      @default(false) @map("add_watermark") // Only works when displayResolution > 0
+  displayResolution Int          @default(0) @map("display_resolution") // 0=original, 1=400px, 2=600px, 3=800px, 4=900px, 5=1024px, 6=1280px, 7=1600px, 8=1920px
+
+  // Upload configuration
+  uploadMode UploadMode @default(single) @map("upload_mode")
+
+  // Scheduling with jitter
+  scheduledAt     DateTime? @map("scheduled_at")
+  jitterSeconds   Int       @default(0) @map("jitter_seconds")
+  actualPublishAt DateTime? @map("actual_publish_at")
+  publishedAt     DateTime? @map("published_at")
+
+  // Results
+  stashItemId  String? @map("stash_item_id")
+  deviationId  String? @map("deviation_id")
+  deviationUrl String? @map("deviation_url")
+  errorMessage String? @map("error_message")
+
+  // Retry tracking
+  retryCount  Int       @default(0) @map("retry_count")
+  lastRetryAt DateTime? @map("last_retry_at")
+
+  // Execution lock (prevents concurrent execution - zero tolerance for duplicates)
+  executionLockId   String?   @map("execution_lock_id")
+  executionLockedAt DateTime? @map("execution_locked_at")
+  executionVersion  Int       @default(0) @map("execution_version")
+
+  // Post count guard (prevents double increment)
+  postCountIncremented Boolean @default(false) @map("post_count_incremented")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  user       User            @relation(fields: [userId], references: [id])
+  automation Automation?     @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  files      DeviationFile[]
+  saleQueue  SaleQueue?
+
+  // Indexes for performance
+  @@index([userId, status])
+  @@index([status, actualPublishAt]) // For past due recovery queries
+  @@index([executionLockId, status]) // For lock cleanup and recovery
+  @@index([automationId]) // For automation-related queries
+  @@unique([deviationId], name: "unique_published_deviation") // Prevent duplicate DeviantArt IDs
+  @@map("deviations")
+}
+
+model DeviationFile {
+  id               String   @id @default(uuid())
+  deviationId      String   @map("deviation_id")
+  originalFilename String   @map("original_filename")
+  r2Key            String   @map("r2_key")
+  r2Url            String   @map("r2_url")
+  mimeType         String   @map("mime_type")
+  fileSize         Int      @map("file_size")
+  width            Int?
+  height           Int?
+  duration         Int?
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relations
+  deviation Deviation @relation(fields: [deviationId], references: [id], onDelete: Cascade)
+
+  @@map("deviation_files")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  keyPrefix  String    @map("key_prefix")
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model GalleryCache {
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  folderId String   @map("folder_id")
+  name     String
+  parentId String?  @map("parent_id")
+  cachedAt DateTime @default(now()) @map("cached_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("galleries_cache")
+}
+
+model NoteFolder {
+  id                   String         @id @default(uuid())
+  userId               String         @map("user_id")
+  folderId             String         @map("folder_id")
+  folderType           NoteFolderType @default(inbox) @map("folder_type")
+  subject              String?
+  lastUsername         String         @map("last_username")
+  lastUserAvatar       String?        @map("last_user_avatar")
+  lastUserDeviantartId String?        @map("last_user_deviantart_id")
+  preview              String?
+  isUnread             Boolean        @default(false) @map("is_unread")
+  isStarred            Boolean        @default(false) @map("is_starred")
+  messageCount         Int            @default(0) @map("message_count")
+  lastMessageAt        DateTime?      @map("last_message_at")
+  cachedAt             DateTime       @default(now()) @map("cached_at")
+
+  // Relations
+  user         User              @relation(fields: [userId], references: [id])
+  folderLabels NoteFolderLabel[]
+
+  @@map("note_folders")
+}
+
+model NoteLabel {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user         User              @relation(fields: [userId], references: [id])
+  folderLabels NoteFolderLabel[]
+
+  @@map("note_labels")
+}
+
+model NoteFolderLabel {
+  id           String @id @default(uuid())
+  noteFolderId String @map("note_folder_id")
+  labelId      String @map("label_id")
+
+  // Relations
+  noteFolder NoteFolder @relation(fields: [noteFolderId], references: [id], onDelete: Cascade)
+  label      NoteLabel  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@map("note_folder_labels")
+}
+
+model NoteTemplate {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  subject   String?
+  body      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("note_templates")
+}
+
+model BrowseCache {
+  id           String   @id @default(uuid())
+  cacheKey     String   @unique @map("cache_key")
+  userId       String?  @map("user_id")
+  responseData String   @map("response_data")
+  cachedAt     DateTime @default(now()) @map("cached_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("browse_cache")
+}
+
+model Template {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  type      TemplateType
+  name      String
+  content   Json
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("templates")
+}
+
+model AdminRole {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  role      String    // 'super_admin', 'admin', 'support'
+  grantedBy String    @map("granted_by")
+  grantedAt DateTime  @default(now()) @map("granted_at")
+  revokedAt DateTime? @map("revoked_at")
+  revokedBy String?   @map("revoked_by")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@map("admin_roles")
+}
+
+model PricePreset {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  price       Int      // Price in cents (5000 = $50.00)
+  minPrice    Int?     @map("min_price") // Minimum price for random range
+  maxPrice    Int?     @map("max_price") // Maximum price for random range
+  currency    String   @default("USD")
+  description String?
+  isDefault   Boolean  @default(false) @map("is_default")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  saleQueues  SaleQueue[]
+  automations Automation[]
+
+  @@index([userId])
+  @@map("price_presets")
+}
+
+model SaleQueue {
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  deviationId   String          @unique @map("deviation_id")
+  pricePresetId String          @map("price_preset_id")
+  price         Int             // Calculated price in cents (INT) - either fixed or random from preset range
+  status        SaleQueueStatus @default(pending)
+
+  // Execution tracking
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  processingBy  String?   @map("processing_by")
+  lockedAt      DateTime? @map("locked_at")
+
+  // Results
+  completedAt   DateTime? @map("completed_at")
+  errorMessage  String?   @map("error_message")
+  errorDetails  Json?     @map("error_details")
+  screenshotKey String?   @map("screenshot_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviation   Deviation   @relation(fields: [deviationId], references: [id], onDelete: Cascade)
+  pricePreset PricePreset @relation(fields: [pricePresetId], references: [id])
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("sale_queue")
+}
+
+model Automation {
+  id     String  @id @default(uuid())
+  userId String  @map("user_id")
+
+  // Workflow identification
+  name        String  // "Exclusive Posts", "Free Artwork"
+  description String? // Optional longer description
+  color       String  @default("#6366f1") // Visual distinction (hex color)
+  icon        String? // Optional emoji/icon
+  sortOrder   Int     @default(0) @map("sort_order") // User-defined ordering
+
+  // Enable/disable toggle
+  enabled Boolean @default(false)
+
+  // Strategy configuration
+  draftSelectionMethod String  @map("draft_selection_method") // "random", "fifo", "lifo"
+  stashOnlyByDefault   Boolean @default(false) @map("stash_only_by_default")
+
+  // Jitter configuration
+  jitterMinSeconds Int @default(0) @map("jitter_min_seconds")
+  jitterMaxSeconds Int @default(300) @map("jitter_max_seconds")
+
+  // Execution lock (prevents concurrent execution)
+  lastExecutionLock DateTime? @map("last_execution_lock")
+  isExecuting       Boolean   @default(false) @map("is_executing")
+
+  // Sale queue integration
+  autoAddToSaleQueue Boolean @default(false) @map("auto_add_to_sale_queue")
+  saleQueuePresetId  String?  @map("sale_queue_preset_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleRules       AutomationScheduleRule[]
+  defaultValues       AutomationDefaultValue[]
+  executionLogs       AutomationExecutionLog[]
+  saleQueuePreset     PricePreset?             @relation(fields: [saleQueuePresetId], references: [id], onDelete: SetNull)
+  scheduledDeviations Deviation[]
+
+  @@index([userId, enabled])
+  @@index([userId, sortOrder])
+  @@index([saleQueuePresetId])
+  @@map("automations")
+}
+
+model AutomationScheduleRule {
+  id           String @id @default(uuid())
+  automationId String @map("automation_id")
+
+  // Rule type
+  type String // "fixed_time", "fixed_interval", "daily_quota"
+
+  // Fixed time fields (e.g., "14:00", "09:30")
+  timeOfDay String? @map("time_of_day")
+
+  // Fixed interval fields (in minutes)
+  intervalMinutes       Int? @map("interval_minutes")
+  deviationsPerInterval Int? @map("deviations_per_interval") // How many to schedule per interval
+
+  // Daily quota fields
+  dailyQuota Int? @map("daily_quota") // Total per day
+
+  // Day of week filter (optional, JSON array like ["monday", "friday"])
+  daysOfWeek Json? @map("days_of_week")
+
+  // Order/priority
+  priority Int     @default(0)
+  enabled  Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId, enabled])
+  @@map("automation_schedule_rules")
+}
+
+model AutomationDefaultValue {
+  id           String @id @default(uuid())
+  automationId String @map("automation_id")
+
+  // Field to set default for
+  fieldName String @map("field_name") // "description", "tags", "isMature", "categoryPath", etc.
+
+  // Value (stored as JSON for flexibility)
+  value Json
+
+  // Only apply if field is empty/null
+  applyIfEmpty Boolean @default(true) @map("apply_if_empty")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, fieldName])
+  @@map("automation_default_values")
+}
+
+model AutomationExecutionLog {
+  id           String @id @default(uuid())
+  automationId String @map("automation_id")
+
+  // Execution details
+  executedAt     DateTime @default(now()) @map("executed_at")
+  scheduledCount Int      @default(0) @map("scheduled_count") // How many scheduled
+  errorMessage   String?  @map("error_message")
+
+  // Which rule triggered (optional reference)
+  triggeredByRuleType String? @map("triggered_by_rule_type")
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId, executedAt])
+  @@map("automation_execution_logs")
+}

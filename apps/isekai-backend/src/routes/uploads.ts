@@ -1,0 +1,215 @@
+/*
+ * Copyright (C) 2025 Isekai
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { Router } from "express";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { randomUUID } from "crypto";
+import { prisma } from "../db/index.js";
+import { AppError } from "../middleware/error.js";
+import {
+  s3Client,
+  validateFileType,
+  validateFileSize,
+  generateR2Key,
+  getPublicUrl,
+  checkStorageLimit,
+} from "../lib/upload-service.js";
+
+const router = Router();
+
+// Get presigned URL for upload
+router.post("/presigned", async (req, res) => {
+  const user = req.user!;
+  const { filename, contentType, fileSize } = req.body;
+
+  if (!filename || !contentType || !fileSize) {
+    throw new AppError(400, "filename, contentType, and fileSize are required");
+  }
+
+  // Validate file type
+  if (!validateFileType(contentType)) {
+    throw new AppError(
+      400,
+      "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, MP4, WebM, MOV"
+    );
+  }
+
+  // Validate file size
+  if (!validateFileSize(fileSize)) {
+    throw new AppError(400, "File size exceeds 50MB limit");
+  }
+
+  const fileId = randomUUID();
+  const r2Key = generateR2Key(user.id, filename);
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME!,
+    Key: r2Key,
+    ContentType: contentType,
+    ContentLength: fileSize,
+  });
+
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 }); // 15 min
+
+  res.json({
+    uploadUrl,
+    fileId,
+    r2Key,
+  });
+});
+
+// Complete upload (link file to deviation)
+router.post("/complete", async (req, res) => {
+  const user = req.user!;
+  const {
+    fileId,
+    deviationId,
+    r2Key,
+    originalFilename,
+    mimeType,
+    fileSize,
+    width,
+    height,
+    duration,
+  } = req.body;
+
+  if (
+    !fileId ||
+    !deviationId ||
+    !r2Key ||
+    !originalFilename ||
+    !mimeType ||
+    !fileSize
+  ) {
+    throw new AppError(400, "Missing required fields");
+  }
+
+  const r2Url = getPublicUrl(r2Key);
+
+  // Get current file count for this deviation to set sort order
+  const existingFiles = await prisma.deviationFile.findMany({
+    where: { deviationId },
+  });
+
+  // Validate max 100 files per deviation
+  if (existingFiles.length >= 100) {
+    throw new AppError(400, "Maximum 100 files per deviation");
+  }
+
+  await prisma.deviationFile.create({
+    data: {
+      id: fileId,
+      deviationId,
+      originalFilename,
+      r2Key,
+      r2Url,
+      mimeType,
+      fileSize,
+      width,
+      height,
+      duration,
+      sortOrder: existingFiles.length,
+    },
+  });
+
+  res.json({ success: true });
+});
+
+// Delete file
+router.delete("/:fileId", async (req, res) => {
+  const { fileId } = req.params;
+  const user = req.user!;
+
+  const file = await prisma.deviationFile.findFirst({
+    where: { id: fileId },
+    include: {
+      deviation: true,
+    },
+  });
+
+  if (!file || file.deviation?.userId !== user.id) {
+    throw new AppError(404, "File not found");
+  }
+
+  // Delete from R2
+  try {
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: file.r2Key,
+    });
+    await s3Client.send(deleteCommand);
+  } catch (error) {
+    console.error("Failed to delete from R2:", error);
+    // Continue with DB deletion even if R2 fails
+  }
+
+  await prisma.deviationFile.delete({ where: { id: fileId } });
+
+  // Note: Storage tracking removed - add storageUsedBytes to schema in v0.2.0 if needed
+  // await prisma.user.update({
+  //   where: { id: user.id },
+  //   data: {
+  //     storageUsedBytes: BigInt(Math.max(0, Number(user.storageUsedBytes) - file.fileSize)),
+  //     updatedAt: new Date(),
+  //   },
+  // });
+
+  res.status(204).send();
+});
+
+// Batch delete files
+router.post("/batch-delete", async (req, res) => {
+  const { fileIds } = req.body;
+  const user = req.user!;
+
+  if (!Array.isArray(fileIds) || fileIds.length === 0) {
+    throw new AppError(400, "fileIds array is required");
+  }
+
+  // Fetch files with deviation info
+  const files = await prisma.deviationFile.findMany({
+    where: { id: { in: fileIds } },
+    include: { deviation: true },
+  });
+
+  // Verify ownership
+  if (files.some((f) => f.deviation?.userId !== user.id)) {
+    throw new AppError(403, "Unauthorized");
+  }
+
+  // Delete from R2 (parallel, ignore failures)
+  await Promise.allSettled(
+    files.map((file) =>
+      s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: file.r2Key,
+        })
+      )
+    )
+  );
+
+  // Delete from DB
+  await prisma.deviationFile.deleteMany({
+    where: { id: { in: fileIds } },
+  });
+
+  res.json({ success: true, deletedCount: files.length });
+});
+
+export { router as uploadsRouter };

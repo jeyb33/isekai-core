@@ -1,0 +1,101 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 150 10% 9%;
+    --foreground: 0 0% 95%;
+    --card: 150 8% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 150 8% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 160 100% 45%;
+    --primary-foreground: 150 10% 9%;
+    --secondary: 150 8% 18%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 150 8% 18%;
+    --muted-foreground: 150 5% 55%;
+    --accent: 160 100% 45%;
+    --accent-foreground: 150 10% 9%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 95%;
+    --border: 150 8% 20%;
+    --input: 150 8% 20%;
+    --ring: 160 100% 45%;
+    --radius: 0;
+    --sidebar-background: 150 10% 6%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 160 100% 45%;
+    --sidebar-primary-foreground: 150 10% 9%;
+    --sidebar-accent: 150 8% 12%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 150 8% 15%;
+    --sidebar-ring: 160 100% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body, #root {
+    @apply h-full overflow-hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  button, a {
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  button {
+    font-weight: 700;
+  }
+
+  /* Custom scrollbar styling */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 0;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
