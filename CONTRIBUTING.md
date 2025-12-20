@@ -20,7 +20,7 @@ Before you begin, make sure you have:
 ```bash
 # Fork and clone the repository
 git clone https://github.com/YOUR_USERNAME/isekai-core.git
-cd isekai
+cd isekai-core
 
 # Add upstream remote
 git remote add upstream https://github.com/isekai-sh/isekai.git
@@ -415,7 +415,7 @@ Contributors will be:
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project (UNLICENSED).
+By contributing, you agree that your contributions will be licensed under the same license as the project AGPL-3.0.
 
 ## Questions?
 
