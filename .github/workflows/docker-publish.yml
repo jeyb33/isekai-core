@@ -100,8 +100,10 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-      - name: Image digest
-        run: echo ${{ steps.meta.outputs.tags }}
+      - name: Published tags
+        run: |
+          echo "Published tags:"
+          echo "${{ steps.meta.outputs.tags }}"
 
   # Create a summary after all images are built
   summary:
