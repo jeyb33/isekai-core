@@ -62,13 +62,13 @@ jobs:
             # Tag with version on tag push (v0.1.0 -> 0.1.0)
             type=semver,pattern={{version}}
             # Tag with major.minor (v0.1.0 -> 0.1)
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
             # Tag with major (v1.0.0 -> 1)
-            type=semver,pattern={{major}}
-            # Tag latest on main branch or release
-            type=raw,value=latest,enable={{is_default_branch}}
-            # Tag with commit SHA (short)
-            type=sha,prefix={{branch}}-,format=short
+            type=semver,pattern={{major}},enable=${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
+            # Tag latest on main branch or release (not for pre-releases)
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && !contains(github.ref_name, 'alpha') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'rc') }}
+            # Tag with commit SHA (short) - only for main branch commits, not tags
+            type=sha,prefix=main-,format=short,enable=${{ github.ref == 'refs/heads/main' }}
             # Manual workflow dispatch tag
             type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
           labels: |
