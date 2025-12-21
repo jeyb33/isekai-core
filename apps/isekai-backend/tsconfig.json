@@ -16,5 +16,5 @@
     "noEmit": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.integration.test.ts", "test"]
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.integration.test.ts", "src/test-helpers/**", "test"]
 }

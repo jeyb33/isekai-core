@@ -11,6 +11,20 @@ export default defineConfig({
       'dist',
       'src/**/*.integration.test.{js,ts}'
     ],
+    setupFiles: ['./src/test-helpers/setup.ts'],
+    onConsoleLog(log) {
+      // Suppress known test noise
+      const suppressPatterns = [
+        '[Redis] Failed to connect to Redis',
+        '[Redis] Caching will be disabled',
+        'Redis connection timeout',
+        'Connection refused',
+      ];
+
+      if (suppressPatterns.some(pattern => log.includes(pattern))) {
+        return false;
+      }
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -18,14 +32,16 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.{js,ts}',
         'src/**/*.integration.test.{js,ts}',
+        'src/test-helpers/**',
+        'src/db/index.ts',
         'src/index.ts',
         'dist/**'
       ],
       thresholds: {
-        lines: 0.5,
-        functions: 1,
-        branches: 0,
-        statements: 0.5
+        lines: 85,
+        functions: 85,
+        branches: 75,
+        statements: 85
       }
     },
     testTimeout: 10000,
