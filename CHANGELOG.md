@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0-alpha.2] - 2025-12-22
+This version enables users run the application via pre-built Docker images.
+
+### Added
+- Easily run via Docker compose
+- Set up unit tests in apps
+- Updated Github Actions to support test, build, and Docker image push to registry
+
+### Known Issues
+- Low coverage in frontend unit tests
+- Linting warnings still not addressed
+
 ## [0.1.0-alpha.1] - 2025-12-21
 
 Initial alpha release of Isekai - A DeviantArt automation and management platform.
