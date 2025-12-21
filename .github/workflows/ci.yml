@@ -32,6 +32,12 @@ jobs:
           # Dummy DATABASE_URL for Prisma schema validation during install
           DATABASE_URL: postgresql://user:password@localhost:5432/dbname
 
+      - name: Build shared package
+        run: pnpm --filter @isekai/shared build
+        env:
+          # Required for Prisma generation in shared package
+          DATABASE_URL: postgresql://user:password@localhost:5432/dbname
+
       - name: Run tests
         run: pnpm test
         env:
