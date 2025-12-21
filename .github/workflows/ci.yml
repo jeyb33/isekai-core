@@ -32,6 +32,12 @@ jobs:
           # Dummy DATABASE_URL for Prisma schema validation during install
           DATABASE_URL: postgresql://user:password@localhost:5432/dbname
 
+      - name: Run tests
+        run: pnpm test
+        env:
+          # Required for tests
+          DATABASE_URL: postgresql://user:password@localhost:5432/dbname
+
       - name: Build all packages
         run: pnpm build
         env:
