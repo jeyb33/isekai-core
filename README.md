@@ -1,8 +1,15 @@
 # Isekai Core
 
 [![CI](https://github.com/isekai-sh/isekai-core/actions/workflows/ci.yml/badge.svg)](https://github.com/isekai-sh/isekai-core/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/isekai-sh/isekai-core/graph/badge.svg)](https://codecov.io/gh/isekai-sh/isekai-core)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Node](https://img.shields.io/badge/node-20.x-green.svg)](https://nodejs.org)
+[![pnpm](https://img.shields.io/badge/pnpm-9.x-orange.svg)](https://pnpm.io)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 
 > Open source DeviantArt posting management platform with scheduling, draft management, ComfyUI integration, and robust publishing automation.
+
+![Isekai](/screenshots/isekai-browse.png)
 
 Isekai is a modern web application that helps artists manage their DeviantArt posting workflow with features like scheduled publishing, draft organization, and AI image generation integration through ComfyUI.
 
@@ -74,7 +81,7 @@ The application will be available at:
 
 - Frontend (React): http://localhost:3000
 - Backend (API): http://localhost:4000
-- Publisher (Health): http://localhost:5000
+- Publisher (Health): http://localhost:8000
 
 ## Project Structure
 

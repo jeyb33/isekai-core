@@ -38,14 +38,46 @@ jobs:
           # Required for Prisma generation in shared package
           DATABASE_URL: postgresql://user:password@localhost:5432/dbname
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run tests with coverage
+        run: pnpm test:coverage
         env:
           # Required for tests
           DATABASE_URL: postgresql://user:password@localhost:5432/dbname
           # Frontend env vars (required for env validation tests)
           VITE_API_URL: http://localhost:3000
           VITE_DEVIANTART_CLIENT_ID: test-client-id
+
+      - name: Upload coverage to Codecov - Backend
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./apps/isekai-backend/coverage/coverage-final.json
+          flags: backend
+          name: backend-coverage
+
+      - name: Upload coverage to Codecov - Frontend
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./apps/isekai-frontend/coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+
+      - name: Upload coverage to Codecov - Publisher
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./apps/isekai-publisher/coverage/coverage-final.json
+          flags: publisher
+          name: publisher-coverage
+
+      - name: Upload coverage to Codecov - Shared
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./packages/shared/coverage/coverage-final.json
+          flags: shared
+          name: shared-coverage
 
       - name: Build all packages
         run: pnpm build
