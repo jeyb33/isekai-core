@@ -42,6 +42,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Loader2, Trash2, Users, Server, HardDrive, Settings as SettingsIcon } from "lucide-react";
+import { PageWrapper, PageHeader, PageContent } from "@/components/ui/page-wrapper";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -159,9 +160,12 @@ export function Settings() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Settings</h1>
+    <PageWrapper className="gap-6">
+      <PageHeader>
+        <h1 className="text-3xl font-bold">Settings</h1>
+      </PageHeader>
 
+      <PageContent className="space-y-6">
       {/* Connected Account */}
       <Card>
         <CardHeader>
@@ -398,6 +402,7 @@ export function Settings() {
           </Card>
         </>
       )}
-    </div>
+      </PageContent>
+    </PageWrapper>
   );
 }
