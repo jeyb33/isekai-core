@@ -153,8 +153,12 @@ isekai-core/
 2. **Apply migrations**: `pnpm db:migrate`
 3. **Start dev servers**: `pnpm dev`
 4. **Make changes**: Follow `.context/workflows.md`
-5. **Commit**: Use Conventional Commits (`.context/ai-rules.md`)
-6. **Submit PR**: See `.context/guidelines.md`
+5. **Before commit** (REQUIRED):
+   - Run `pnpm lint` - Check code style
+   - Run `pnpm test:coverage` - Verify tests pass and coverage meets threshold
+   - Run `pnpm build` - Ensure code compiles
+6. **Commit**: Use Conventional Commits (`.context/ai-rules.md`)
+7. **Submit PR**: See `.context/guidelines.md`
 
 ## Resources
 
