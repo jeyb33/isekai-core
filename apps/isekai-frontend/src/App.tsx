@@ -22,20 +22,19 @@ import { useAuthStore } from "@/stores/auth";
 import "@/stores/whitelabel";
 
 // Layouts
-import { Layout } from "@/components/Layout";
+import { AppLayout } from "@/components/layouts/AppLayout";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 
 // Pages
 import { Login } from "@/pages/Login";
 import { Callback } from "@/pages/Callback";
-import { Dashboard } from "@/pages/Dashboard";
 import { EditDeviation } from "@/pages/EditDeviation";
 import { Draft } from "@/pages/Draft";
 import { Scheduled } from "@/pages/Scheduled";
 import { Published } from "@/pages/Published";
 import { Templates } from "@/pages/Templates";
 import { Settings } from "@/pages/Settings";
-import { Inspiration } from "@/pages/Inspiration";
+import { Browse } from "@/pages/Browse";
 import { Galleries } from "@/pages/Galleries";
 import { GalleryDetail } from "@/pages/GalleryDetail";
 import { ApiKeys } from "@/pages/ApiKeys";
@@ -67,7 +66,7 @@ function App() {
     <>
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route element={<AuthLayout />}>
           <Route path="/callback" element={<Callback />} />
@@ -77,12 +76,11 @@ function App() {
         <Route
           element={
             <ProtectedRoute>
-              <Layout />
+              <AppLayout />
             </ProtectedRoute>
           }
         >
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/inspiration" element={<Inspiration />} />
+          <Route path="/browse" element={<Browse />} />
           <Route path="/review" element={<Review />} />
           <Route path="/automation" element={<AutomationList />} />
           <Route path="/automation/:id" element={<AutomationDetail />} />
@@ -92,7 +90,6 @@ function App() {
           <Route path="/scheduled" element={<Scheduled />} />
           <Route path="/published" element={<Published />} />
           {/* Redirect old routes */}
-          <Route path="/browse" element={<Navigate to="/inspiration" replace />} />
           <Route path="/schedule" element={<Navigate to="/draft" replace />} />
           <Route path="/queue" element={<Navigate to="/scheduled" replace />} />
           <Route

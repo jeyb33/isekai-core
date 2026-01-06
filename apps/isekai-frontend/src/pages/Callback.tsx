@@ -33,7 +33,7 @@ export function Callback() {
 
     // Fetch user data after OAuth callback
     fetchUser().then(() => {
-      navigate("/dashboard");
+      navigate("/browse");
     });
   }, [searchParams, navigate, fetchUser]);
 

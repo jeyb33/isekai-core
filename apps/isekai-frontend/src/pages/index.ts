@@ -15,13 +15,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// Note: Landing, Queue, History, Pricing pages not yet implemented - add in v0.2.0
+// export { Landing } from './Landing';
 export { Login } from "./Login";
 export { Callback } from "./Callback";
-export { Dashboard } from "./Dashboard";
-export { Inspiration } from "./Inspiration";
+export { Browse } from "./Browse";
 export { Schedule } from "./Schedule";
+// export { Queue } from './Queue';
+// export { History } from './History';
 export { EditDeviation } from "./EditDeviation";
 export { Settings } from "./Settings";
+// export { Pricing } from './Pricing';
 export { Galleries } from "./Galleries";
 export { GalleryDetail } from "./GalleryDetail";
 export { Templates } from "./Templates";

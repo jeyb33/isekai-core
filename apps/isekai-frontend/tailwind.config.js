@@ -12,9 +12,8 @@ export default {
   	},
   	extend: {
   		fontFamily: {
-  			sans: ['Geist Variable', 'Geist', 'system-ui', 'sans-serif'],
-  			heading: ['Geist Mono Variable', 'Geist Mono', 'monospace'],
-  			mono: ['Geist Mono Variable', 'Geist Mono', 'monospace'],
+  			sans: ['Inter', 'sans-serif'],
+  			heading: ['IBM Plex Sans', 'sans-serif'],
   		},
   		colors: {
   			border: 'hsl(var(--border))',
@@ -54,9 +53,6 @@ export default {
   				green: '#00e59b',
   				dark: '#06070d'
   			},
-  			emerald: {
-  				400: '#34d399',
-  			},
   			sidebar: {
   				DEFAULT: 'hsl(var(--sidebar-background))',
   				foreground: 'hsl(var(--sidebar-foreground))',
@@ -69,9 +65,9 @@ export default {
   			}
   		},
   		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)',
+  			lg: '0',
+  			md: '0',
+  			sm: '0'
   		},
   		keyframes: {
   			'accordion-down': {
