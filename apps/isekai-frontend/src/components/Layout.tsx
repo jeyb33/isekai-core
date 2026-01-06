@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useWhitelabelStore } from "@/stores/whitelabel";
 import { useReviewCount } from "@/hooks/useReviewCount";
+import { TopLoadingBar } from "@/components/TopLoadingBar";
 
 interface NavItem {
   path: string;
@@ -123,6 +124,8 @@ export function Layout() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <TopLoadingBar />
+
       {/* Header with gradient background */}
       <nav className="sticky top-0 left-0 right-0 z-50 border-b border-primary/10 backdrop-blur-md">
         {/* Background with pattern and gradient overlay */}
