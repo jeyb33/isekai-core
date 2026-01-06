@@ -16,8 +16,9 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2, FileImage, Calendar, Check, Send } from "lucide-react";
+import { FileImage, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -29,7 +30,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
@@ -43,14 +43,12 @@ import type { Deviation } from "@isekai/shared";
 
 interface DraftTableRowProps {
   draft: Deviation;
-  index: number;
   isSelected: boolean;
   onSelect: () => void;
 }
 
 export function DraftTableRow({
   draft,
-  index,
   isSelected,
   onSelect,
 }: DraftTableRowProps) {
@@ -67,6 +65,7 @@ export function DraftTableRow({
   );
   const [tagsOpen, setTagsOpen] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Deviation>) => deviations.update(draft.id, data),
@@ -98,21 +97,6 @@ export function DraftTableRow({
       toast({
         title: "Error",
         description: error.message || "Failed to schedule draft",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => deviations.delete(draft.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deviations", "draft"] });
-      toast({ title: "Deleted", description: "Draft deleted successfully" });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete draft",
         variant: "destructive",
       });
     },
@@ -197,33 +181,74 @@ export function DraftTableRow({
     );
   }, [draft.tags, draft.description, draft.galleryIds, draft.scheduledAt]);
 
+  // Handle ESC key to close lightbox and prevent body scroll
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && lightboxOpen) {
+        setLightboxOpen(false);
+      }
+    };
+
+    if (lightboxOpen) {
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [lightboxOpen]);
+
+  const handleRowClick = (e: React.MouseEvent) => {
+    // Don't select if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    const interactiveElements = ['BUTTON', 'INPUT', 'TEXTAREA', 'A', 'LABEL'];
+    const isInteractive =
+      interactiveElements.includes(target.tagName) ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('textarea') ||
+      target.closest('a') ||
+      target.closest('[role="checkbox"]') ||
+      target.closest('[role="dialog"]') ||
+      target.closest('[role="menu"]') ||
+      target.closest('[data-radix-popper-content-wrapper]') ||
+      target.contentEditable === 'true' ||
+      target.closest('[contenteditable="true"]');
+
+    if (!isInteractive) {
+      onSelect();
+    }
+  };
+
   return (
-    <TableRow>
+    <TableRow className="h-[68px] cursor-pointer" onClick={handleRowClick}>
       {/* Checkbox */}
-      <TableCell>
+      <TableCell className="py-1 pl-4 text-center">
         <Checkbox checked={isSelected} onCheckedChange={onSelect} />
       </TableCell>
 
-      {/* Number */}
-      <TableCell className="text-muted-foreground">{index}</TableCell>
-
       {/* Preview */}
-      <TableCell>
-        {draft.files && draft.files.length > 0 && draft.files[0].storageUrl ? (
-          <img
-            src={draft.files[0].storageUrl}
-            alt={draft.title}
-            className="w-20 h-20 object-cover rounded"
-          />
-        ) : (
-          <div className="w-20 h-20 bg-muted rounded flex items-center justify-center">
-            <FileImage className="h-10 w-10 text-muted-foreground" />
-          </div>
-        )}
+      <TableCell className="py-1">
+        <div
+          className="w-14 h-14 rounded overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => draft.files?.[0]?.storageUrl && setLightboxOpen(true)}
+        >
+          {draft.files && draft.files.length > 0 && draft.files[0].storageUrl ? (
+            <img
+              src={draft.files[0].storageUrl}
+              alt={draft.title}
+              className="w-full h-full object-cover object-center"
+            />
+          ) : (
+            <FileImage className="h-5 w-5 text-muted-foreground" />
+          )}
+        </div>
       </TableCell>
 
       {/* Editable Title */}
-      <TableCell>
+      <TableCell className="py-1 max-w-[200px]">
         <div
           ref={titleRef}
           contentEditable={isEditingTitle}
@@ -231,8 +256,8 @@ export function DraftTableRow({
           onClick={() => setIsEditingTitle(true)}
           onBlur={handleTitleBlur}
           onKeyDown={handleTitleKeyDown}
-          className={`font-medium cursor-text px-2 py-1 rounded min-h-[2rem] ${
-            isEditingTitle ? "bg-muted ring-2 ring-ring" : "hover:bg-muted/50"
+          className={`font-medium cursor-text px-2 py-1 rounded text-sm truncate ${
+            isEditingTitle ? "bg-muted ring-2 ring-ring whitespace-normal" : "hover:bg-muted/50"
           }`}
         >
           {draft.title}
@@ -240,13 +265,13 @@ export function DraftTableRow({
       </TableCell>
 
       {/* Tags with Popover */}
-      <TableCell>
+      <TableCell className="py-1 max-w-[100px]">
         <Popover open={tagsOpen} onOpenChange={setTagsOpen}>
           <PopoverTrigger asChild>
-            <button className="text-left text-sm text-muted-foreground transition-colors w-full">
+            <button className="text-left text-xs text-muted-foreground transition-colors truncate block w-full">
               {tags.length > 0
-                ? tags.slice(0, 2).join(", ") + (tags.length > 2 ? "..." : "")
-                : "Add tags..."}
+                ? `${tags.length} tag${tags.length > 1 ? "s" : ""}`
+                : "—"}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-80" align="start">
@@ -303,11 +328,11 @@ export function DraftTableRow({
       </TableCell>
 
       {/* Description with Popover */}
-      <TableCell>
+      <TableCell className="py-1 max-w-[100px]">
         <Popover open={descOpen} onOpenChange={setDescOpen}>
           <PopoverTrigger asChild>
-            <button className="text-left text-sm text-muted-foreground transition-colors w-full max-w-xs truncate">
-              {description || "Add description..."}
+            <button className="text-left text-xs text-muted-foreground transition-colors truncate block w-full">
+              {description ? "Has desc" : "—"}
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-96" align="start">
@@ -342,7 +367,7 @@ export function DraftTableRow({
       </TableCell>
 
       {/* Gallery Folders */}
-      <TableCell>
+      <TableCell className="py-1 max-w-[80px]">
         <GallerySelector
           selectedGalleryIds={galleryIds}
           onSelect={(ids) => {
@@ -350,65 +375,88 @@ export function DraftTableRow({
             updateMutation.mutate({ galleryIds: ids });
           }}
           triggerButton={
-            <button className="text-left text-sm text-muted-foreground transition-colors w-full">
+            <button className="text-left text-xs text-muted-foreground transition-colors truncate block w-full">
               {galleryIds.length > 0
-                ? `${galleryIds.length} folder${
-                    galleryIds.length > 1 ? "s" : ""
-                  }`
-                : "Add to folders..."}
+                ? `${galleryIds.length} folder${galleryIds.length > 1 ? "s" : ""}`
+                : "—"}
             </button>
           }
         />
       </TableCell>
 
-      {/* Inline Schedule Date & Time */}
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <DateTimePicker
-            date={scheduledDate}
-            setDate={(date) => {
-              setScheduledDate(date);
-              if (date) {
-                updateMutation.mutate({ scheduledAt: date.toISOString() });
-              }
-            }}
-            label=""
-          />
-        </div>
+      {/* Schedule Date & Time */}
+      <TableCell className="py-1 max-w-[120px]">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="text-left text-xs text-muted-foreground transition-colors truncate block w-full">
+              {scheduledDate
+                ? scheduledDate.toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
+                : "—"}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-3" align="start">
+            <DateTimePicker
+              date={scheduledDate}
+              setDate={(date) => {
+                setScheduledDate(date);
+                if (date) {
+                  updateMutation.mutate({ scheduledAt: date.toISOString() });
+                }
+              }}
+              label="Schedule"
+            />
+          </PopoverContent>
+        </Popover>
       </TableCell>
 
-      {/* Sta.sh Only - Feature not yet implemented in schema, add in v0.2.0 */}
-      <TableCell>
-        <div className="flex items-center justify-center">
-          <Switch checked={false} disabled onCheckedChange={() => {}} />
-        </div>
+      {/* Action */}
+      <TableCell className="py-1 pr-4 text-center">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7"
+          onClick={() => {
+            if (scheduledDate) {
+              scheduleMutation.mutate(scheduledDate.toISOString());
+            }
+          }}
+          disabled={!scheduledDate || scheduleMutation.isPending}
+        >
+          <Send className="h-3.5 w-3.5 mr-1.5" />
+          Schedule
+        </Button>
       </TableCell>
 
-      {/* Actions */}
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="default"
-            onClick={() => {
-              if (scheduledDate) {
-                scheduleMutation.mutate(scheduledDate.toISOString());
-              }
-            }}
-            disabled={!scheduledDate || scheduleMutation.isPending}
+      {/* Lightbox overlay - rendered via portal */}
+      {lightboxOpen &&
+        draft.files?.[0]?.storageUrl &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setLightboxOpen(false)}
           >
-            <Send className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={() => deleteMutation.mutate()}
-            disabled={deleteMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </TableCell>
+            <div className="relative max-w-full max-h-full">
+              <img
+                src={draft.files[0].storageUrl}
+                alt={draft.title}
+                className="max-w-full max-h-[95vh] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+                onClick={() => setLightboxOpen(false)}
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </TableRow>
   );
 }

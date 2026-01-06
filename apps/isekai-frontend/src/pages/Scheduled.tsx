@@ -15,38 +15,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Clock,
-  Upload,
-  Eye,
   X,
-  Calendar as CalendarIcon,
   Zap,
   Folder,
   Tags as TagsIcon,
+  Search,
+  AlignLeft,
+  Check,
   FileImage,
+  Loader2,
 } from "lucide-react";
-import { format } from "date-fns";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import type { EventClickArg } from "@fullcalendar/core";
-import "./scheduled-calendar.css";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -55,16 +46,12 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,81 +69,85 @@ import {
 } from "@/components/TemplateSelector";
 import { deviations } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import {
-  formatScheduleDateTimeShort,
-  getTimezoneAbbreviation,
-} from "@/lib/timezone";
-import { PageWrapper, PageHeader, PageContent } from "@/components/ui/page-wrapper";
 import type { Deviation } from "@isekai/shared";
 
-type ViewMode = "table" | "calendar";
+const PAGE_SIZE = 50;
 
 export function Scheduled() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const timezone = getTimezoneAbbreviation();
-
-  // View mode
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
-
-  // Calendar state
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Bulk operation states
-  const [bulkScheduleDate, setBulkScheduleDate] = useState<Date | undefined>(
-    undefined
-  );
+  const [bulkScheduleDate, setBulkScheduleDate] = useState<Date | undefined>(undefined);
   const [bulkGalleryIds, setBulkGalleryIds] = useState<string[]>([]);
   const [bulkTags, setBulkTags] = useState<string[]>([]);
   const [bulkDescription, setBulkDescription] = useState<string>("");
   const [tagsOpen, setTagsOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [showPublishNowDialog, setShowPublishNowDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-  // Fetch scheduled deviations (status = scheduled)
-  const { data, isLoading } = useQuery({
+  // Fetch scheduled deviations with infinite scroll
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["deviations", "scheduled"],
-    queryFn: async () => {
-      return await deviations.list({ status: "scheduled" });
+    queryFn: async ({ pageParam = 1 }) => {
+      return await deviations.list({ status: "scheduled", page: pageParam, limit: PAGE_SIZE });
     },
+    getNextPageParam: (lastPage, allPages) => {
+      const totalFetched = allPages.length * PAGE_SIZE;
+      return totalFetched < lastPage.total ? allPages.length + 1 : undefined;
+    },
+    initialPageParam: 1,
   });
 
-  const scheduledDeviations = data?.deviations || [];
+  // Intersection observer for infinite scroll
+  const handleObserver = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      const [target] = entries;
+      if (target.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage]
+  );
 
-  // Convert deviations to FullCalendar events
-  const calendarEvents = useMemo(() => {
-    return scheduledDeviations
-      .filter((dev) => dev.scheduledAt) // Only include deviations with a schedule date
-      .map((dev) => ({
-        id: dev.id,
-        title: dev.title,
-        start: dev.scheduledAt!,
-        end: dev.scheduledAt!,
-        extendedProps: {
-          deviation: dev,
-        },
-        backgroundColor:
-          new Date(dev.scheduledAt!) < new Date() ? "#ef4444" : "#3b82f6",
-        borderColor:
-          new Date(dev.scheduledAt!) < new Date() ? "#dc2626" : "#2563eb",
-      }));
-  }, [scheduledDeviations]);
+  useEffect(() => {
+    const element = loadMoreRef.current;
+    if (!element) return;
 
-  // Get deviations for selected date
-  const selectedDateDeviations = useMemo(() => {
-    if (!selectedDate) return [];
-    const dateKey = format(selectedDate, "yyyy-MM-dd");
-    return scheduledDeviations.filter((dev) => {
-      if (!dev.scheduledAt) return false;
-      return format(new Date(dev.scheduledAt), "yyyy-MM-dd") === dateKey;
+    const observer = new IntersectionObserver(handleObserver, {
+      root: null,
+      rootMargin: "100px",
+      threshold: 0,
     });
-  }, [selectedDate, scheduledDeviations]);
 
-  // Mutations with optimistic updates
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [handleObserver]);
+
+  const allScheduled = data?.pages.flatMap((page) => page.deviations) || [];
+  const totalCount = data?.pages[0]?.total || 0;
+
+  // Filter based on search query
+  const scheduledDeviations = searchQuery
+    ? allScheduled.filter((d) =>
+        d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.tags?.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : allScheduled;
+
+  // Mutations
   const batchRescheduleMutation = useMutation({
     mutationFn: async ({
       deviationIds,
@@ -168,13 +159,8 @@ export function Scheduled() {
       return await deviations.batchReschedule(deviationIds, scheduledAt);
     },
     onMutate: async ({ deviationIds, scheduledAt }) => {
-      await queryClient.cancelQueries({
-        queryKey: ["deviations", "scheduled"],
-      });
-      const previousData = queryClient.getQueryData([
-        "deviations",
-        "scheduled",
-      ]);
+      await queryClient.cancelQueries({ queryKey: ["deviations", "scheduled"] });
+      const previousData = queryClient.getQueryData(["deviations", "scheduled"]);
 
       queryClient.setQueryData(["deviations", "scheduled"], (old: any) => {
         if (!old) return old;
@@ -190,10 +176,7 @@ export function Scheduled() {
     },
     onError: (error: any, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          ["deviations", "scheduled"],
-          context.previousData
-        );
+        queryClient.setQueryData(["deviations", "scheduled"], context.previousData);
       }
       toast({
         title: "Error",
@@ -213,13 +196,8 @@ export function Scheduled() {
       return await deviations.batchCancel(deviationIds);
     },
     onMutate: async (deviationIds) => {
-      await queryClient.cancelQueries({
-        queryKey: ["deviations", "scheduled"],
-      });
-      const previousData = queryClient.getQueryData([
-        "deviations",
-        "scheduled",
-      ]);
+      await queryClient.cancelQueries({ queryKey: ["deviations", "scheduled"] });
+      const previousData = queryClient.getQueryData(["deviations", "scheduled"]);
 
       queryClient.setQueryData(["deviations", "scheduled"], (old: any) => {
         if (!old) return old;
@@ -235,10 +213,7 @@ export function Scheduled() {
     },
     onError: (error: any, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          ["deviations", "scheduled"],
-          context.previousData
-        );
+        queryClient.setQueryData(["deviations", "scheduled"], context.previousData);
       }
       toast({
         title: "Error",
@@ -249,6 +224,7 @@ export function Scheduled() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deviations", "draft"] });
       setSelectedIds(new Set());
+      setShowCancelDialog(false);
       toast({ title: "Cancelled", description: "Moved back to drafts" });
     },
   });
@@ -258,13 +234,8 @@ export function Scheduled() {
       return await deviations.batchPublishNow(deviationIds);
     },
     onMutate: async (deviationIds) => {
-      await queryClient.cancelQueries({
-        queryKey: ["deviations", "scheduled"],
-      });
-      const previousData = queryClient.getQueryData([
-        "deviations",
-        "scheduled",
-      ]);
+      await queryClient.cancelQueries({ queryKey: ["deviations", "scheduled"] });
+      const previousData = queryClient.getQueryData(["deviations", "scheduled"]);
 
       queryClient.setQueryData(["deviations", "scheduled"], (old: any) => {
         if (!old) return old;
@@ -280,10 +251,7 @@ export function Scheduled() {
     },
     onError: (error: any, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          ["deviations", "scheduled"],
-          context.previousData
-        );
+        queryClient.setQueryData(["deviations", "scheduled"], context.previousData);
       }
       toast({
         title: "Error",
@@ -311,13 +279,8 @@ export function Scheduled() {
       );
     },
     onMutate: async ({ deviationIds, galleryIds }) => {
-      await queryClient.cancelQueries({
-        queryKey: ["deviations", "scheduled"],
-      });
-      const previousData = queryClient.getQueryData([
-        "deviations",
-        "scheduled",
-      ]);
+      await queryClient.cancelQueries({ queryKey: ["deviations", "scheduled"] });
+      const previousData = queryClient.getQueryData(["deviations", "scheduled"]);
 
       queryClient.setQueryData(["deviations", "scheduled"], (old: any) => {
         if (!old) return old;
@@ -332,16 +295,12 @@ export function Scheduled() {
       return { previousData };
     },
     onSuccess: () => {
-      setSelectedIds(new Set());
       setBulkGalleryIds([]);
       toast({ title: "Updated", description: "Gallery folders assigned" });
     },
     onError: (error: any, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          ["deviations", "scheduled"],
-          context.previousData
-        );
+        queryClient.setQueryData(["deviations", "scheduled"], context.previousData);
       }
       toast({
         title: "Error",
@@ -367,13 +326,8 @@ export function Scheduled() {
       );
     },
     onMutate: async ({ deviationIds, tags }) => {
-      await queryClient.cancelQueries({
-        queryKey: ["deviations", "scheduled"],
-      });
-      const previousData = queryClient.getQueryData([
-        "deviations",
-        "scheduled",
-      ]);
+      await queryClient.cancelQueries({ queryKey: ["deviations", "scheduled"] });
+      const previousData = queryClient.getQueryData(["deviations", "scheduled"]);
 
       queryClient.setQueryData(["deviations", "scheduled"], (old: any) => {
         if (!old) return old;
@@ -388,17 +342,13 @@ export function Scheduled() {
       return { previousData };
     },
     onSuccess: () => {
-      setSelectedIds(new Set());
       setBulkTags([]);
       setTagsOpen(false);
       toast({ title: "Updated", description: "Tags assigned" });
     },
     onError: (error: any, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          ["deviations", "scheduled"],
-          context.previousData
-        );
+        queryClient.setQueryData(["deviations", "scheduled"], context.previousData);
       }
       toast({
         title: "Error",
@@ -424,13 +374,8 @@ export function Scheduled() {
       );
     },
     onMutate: async ({ deviationIds, description }) => {
-      await queryClient.cancelQueries({
-        queryKey: ["deviations", "scheduled"],
-      });
-      const previousData = queryClient.getQueryData([
-        "deviations",
-        "scheduled",
-      ]);
+      await queryClient.cancelQueries({ queryKey: ["deviations", "scheduled"] });
+      const previousData = queryClient.getQueryData(["deviations", "scheduled"]);
 
       queryClient.setQueryData(["deviations", "scheduled"], (old: any) => {
         if (!old) return old;
@@ -445,17 +390,13 @@ export function Scheduled() {
       return { previousData };
     },
     onSuccess: () => {
-      setSelectedIds(new Set());
       setBulkDescription("");
       setDescriptionOpen(false);
       toast({ title: "Updated", description: "Description assigned" });
     },
     onError: (error: any, _variables, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(
-          ["deviations", "scheduled"],
-          context.previousData
-        );
+        queryClient.setQueryData(["deviations", "scheduled"], context.previousData);
       }
       toast({
         title: "Error",
@@ -487,33 +428,19 @@ export function Scheduled() {
     setSelectedIds(newSelected);
   };
 
-  const handleBulkReschedule = () => {
-    if (selectedIds.size === 0 || !bulkScheduleDate) return;
-    batchRescheduleMutation.mutate({
-      deviationIds: Array.from(selectedIds),
-      scheduledAt: bulkScheduleDate.toISOString(),
-    });
-  };
-
-  const handleBulkCancel = () => {
-    if (selectedIds.size === 0) return;
-    batchCancelMutation.mutate(Array.from(selectedIds));
-  };
-
-  const handleBulkPublishNow = () => {
-    if (selectedIds.size === 0) return;
-    setShowPublishNowDialog(true);
-  };
-
-  const confirmBulkPublishNow = () => {
-    batchPublishNowMutation.mutate(Array.from(selectedIds));
-  };
-
   const handleBulkAssignTags = () => {
     if (selectedIds.size === 0 || bulkTags.length === 0) return;
     batchAssignTagsMutation.mutate({
       deviationIds: Array.from(selectedIds),
       tags: bulkTags,
+    });
+  };
+
+  const handleBulkClearTags = () => {
+    if (selectedIds.size === 0) return;
+    batchAssignTagsMutation.mutate({
+      deviationIds: Array.from(selectedIds),
+      tags: [],
     });
   };
 
@@ -537,131 +464,118 @@ export function Scheduled() {
   };
 
   return (
-    <PageWrapper className="gap-4 md:gap-6">
-      <PageHeader>
-        <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Scheduled</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your scheduled deviations ({scheduledDeviations.length})
-          </p>
-        </div>
-        </div>
-      </PageHeader>
-
-      <PageContent>
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-        <TabsList>
-          <TabsTrigger value="table">Table View</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar View</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="table" className="mt-4">
-          <Card className="flex-1 flex flex-col h-full">
-            <CardContent className="pt-6 flex-1 flex flex-col h-full">
-              {/* Bulk Operations Toolbar */}
-              <div className="mb-4 p-4 border rounded-lg bg-background">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex items-center ${
-                        selectedIds.size === 0
-                          ? "opacity-50 pointer-events-none"
-                          : ""
-                      }`}
-                    >
-                      <DateTimePicker
-                        date={bulkScheduleDate}
-                        setDate={(date) => {
-                          setBulkScheduleDate(date);
-                          if (date && selectedIds.size > 0) {
-                            batchRescheduleMutation.mutate({
-                              deviationIds: Array.from(selectedIds),
-                              scheduledAt: date.toISOString(),
-                            });
-                          }
-                        }}
-                        label=""
-                      />
-                    </div>
-                    <div className="h-8 w-px bg-border" />
-                    <GallerySelector
-                      selectedGalleryIds={bulkGalleryIds}
-                      onSelect={(galleryIds) => {
-                        setBulkGalleryIds(galleryIds);
-                        if (selectedIds.size > 0) {
-                          batchAssignGalleryMutation.mutate({
-                            deviationIds: Array.from(selectedIds),
-                            galleryIds,
-                          });
-                        }
-                      }}
-                      triggerButton={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={selectedIds.size === 0}
-                          className="h-8"
-                        >
-                          <Folder className="h-4 w-4 mr-2" />
-                          {bulkGalleryIds.length > 0
-                            ? `${bulkGalleryIds.length} folder${
-                                bulkGalleryIds.length > 1 ? "s" : ""
-                              }`
-                            : "Assign to Folder"}
-                        </Button>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Toolbar */}
+      <Card className="mb-3 flex-shrink-0">
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between gap-2">
+            {selectedIds.size === 0 ? (
+              /* Default state - Search and Go to Drafts */
+              <>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search scheduled..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-8 w-64 pl-8 text-sm"
+                  />
+                </div>
+                <Button onClick={() => navigate("/draft")} variant="outline" size="sm" className="h-8">
+                  Go to Drafts
+                </Button>
+              </>
+            ) : (
+              /* Selection state - Bulk actions */
+              <>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setSelectedIds(new Set())}
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                  >
+                    Clear selection
+                  </Button>
+                  <div className="h-4 w-px bg-border" />
+                  <DateTimePicker
+                    date={bulkScheduleDate}
+                    setDate={(date) => {
+                      setBulkScheduleDate(date);
+                      if (date && selectedIds.size > 0) {
+                        batchRescheduleMutation.mutate({
+                          deviationIds: Array.from(selectedIds),
+                          scheduledAt: date.toISOString(),
+                        });
                       }
-                    />
-                    <Popover open={tagsOpen} onOpenChange={setTagsOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={selectedIds.size === 0}
-                          className="h-8"
-                        >
-                          <TagsIcon className="h-4 w-4 mr-2" />
-                          {bulkTags.length > 0
-                            ? `${bulkTags.length} tag${
-                                bulkTags.length > 1 ? "s" : ""
-                              }`
-                            : "Add Tags"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80" align="start">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label>Tags</Label>
-                            <TagTemplateSelector
-                              onSelect={(templateTags) =>
-                                setBulkTags(templateTags)
-                              }
-                            />
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {bulkTags.map((tag, idx) => (
-                              <Badge key={idx} variant="secondary">
-                                {tag}
-                                <button
-                                  onClick={() => removeBulkTag(idx)}
-                                  className="ml-1 hover:bg-muted rounded-full p-0.5"
-                                >
-                                  ×
-                                </button>
-                              </Badge>
-                            ))}
-                          </div>
-                          <Input
-                            placeholder="Add tag and press Enter..."
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                addBulkTag(e.currentTarget.value);
-                                e.currentTarget.value = "";
-                              }
-                            }}
+                    }}
+                    label=""
+                  />
+                  <GallerySelector
+                    selectedGalleryIds={bulkGalleryIds}
+                    onSelect={(galleryIds) => {
+                      setBulkGalleryIds(galleryIds);
+                      if (selectedIds.size > 0) {
+                        batchAssignGalleryMutation.mutate({
+                          deviationIds: Array.from(selectedIds),
+                          galleryIds,
+                        });
+                      }
+                    }}
+                    triggerButton={
+                      <Button variant="outline" size="sm" className="h-8">
+                        <Folder className="h-4 w-4 mr-2" />
+                        Folder
+                      </Button>
+                    }
+                  />
+                  <Popover open={tagsOpen} onOpenChange={setTagsOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8">
+                        <TagsIcon className="h-4 w-4 mr-2" />
+                        Tags
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" align="start">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>Tags</Label>
+                          <TagTemplateSelector
+                            onSelect={(templateTags) => setBulkTags(templateTags)}
                           />
-                          <div className="flex justify-end gap-2">
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {bulkTags.map((tag, idx) => (
+                            <Badge key={idx} variant="secondary">
+                              {tag}
+                              <button
+                                onClick={() => removeBulkTag(idx)}
+                                className="ml-1 hover:bg-muted rounded-full p-0.5"
+                              >
+                                ×
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                        <Input
+                          placeholder="Add tag and press Enter..."
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addBulkTag(e.currentTarget.value);
+                              e.currentTarget.value = "";
+                            }
+                          }}
+                        />
+                        <div className="flex justify-between gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleBulkClearTags}
+                          >
+                            Clear Tags
+                          </Button>
+                          <div className="flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
@@ -674,266 +588,156 @@ export function Scheduled() {
                             </Button>
                           </div>
                         </div>
-                      </PopoverContent>
-                    </Popover>
-                    <Popover
-                      open={descriptionOpen}
-                      onOpenChange={setDescriptionOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={selectedIds.size === 0}
-                          className="h-8"
-                        >
-                          <FileImage className="h-4 w-4 mr-2" />
-                          {bulkDescription
-                            ? "Description set"
-                            : "Add Description"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-96" align="start">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label>Description</Label>
-                            <DescriptionTemplateSelector
-                              onSelect={(text) => setBulkDescription(text)}
-                            />
-                          </div>
-                          <Textarea
-                            value={bulkDescription}
-                            onChange={(e) => setBulkDescription(e.target.value)}
-                            placeholder="Enter description..."
-                            rows={6}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Popover open={descriptionOpen} onOpenChange={setDescriptionOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8">
+                        <AlignLeft className="h-4 w-4 mr-2" />
+                        Description
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-96" align="start">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>Description</Label>
+                          <DescriptionTemplateSelector
+                            onSelect={(text) => setBulkDescription(text)}
                           />
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setDescriptionOpen(false)}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={handleBulkAssignDescription}
-                            >
-                              Apply
-                            </Button>
-                          </div>
                         </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="flex items-center gap-2 h-8">
-                    {selectedIds.size > 0 && (
-                      <>
-                        <Button
-                          onClick={() => setSelectedIds(new Set())}
-                          variant="outline"
-                          size="sm"
-                          className="h-full"
-                        >
-                          Clear Selection
-                        </Button>
-                        <Button
-                          onClick={handleBulkCancel}
-                          variant="outline"
-                          size="sm"
-                          className="h-full"
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Cancel ({selectedIds.size})
-                        </Button>
-                        <Button
-                          onClick={handleBulkPublishNow}
-                          variant="default"
-                          size="sm"
-                          className="h-full"
-                        >
-                          <Zap className="h-4 w-4 mr-2" />
-                          Publish Now ({selectedIds.size})
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      onClick={() => handleBulkReschedule()}
-                      disabled={!bulkScheduleDate || selectedIds.size === 0}
-                      size="sm"
-                      variant="default"
-                      className="h-full"
-                    >
-                      <CalendarIcon className="h-4 w-4 mr-2" />
-                      Reschedule{" "}
-                      {selectedIds.size > 0 && `(${selectedIds.size})`}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Table */}
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              ) : scheduledDeviations.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center text-muted-foreground">
-                    <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium mb-2">
-                      No scheduled deviations
-                    </p>
-                    <p className="text-sm mb-4">
-                      Schedule deviations from your drafts to see them here
-                    </p>
-                    <Button onClick={() => navigate("/draft")}>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Go to Drafts
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12">
-                          <Checkbox
-                            checked={
-                              selectedIds.size === scheduledDeviations.length &&
-                              scheduledDeviations.length > 0
-                            }
-                            onCheckedChange={toggleSelectAll}
-                          />
-                        </TableHead>
-                        <TableHead className="w-16">#</TableHead>
-                        <TableHead className="w-24">Preview</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Scheduled Time</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {scheduledDeviations.map((deviation, index) => (
-                        <ScheduledRow
-                          key={deviation.id}
-                          deviation={deviation}
-                          index={index + 1}
-                          isSelected={selectedIds.has(deviation.id)}
-                          onSelect={() => toggleSelect(deviation.id)}
-                          onView={() => navigate(`/deviations/${deviation.id}`)}
-                          onCancel={() =>
-                            batchCancelMutation.mutate([deviation.id])
-                          }
-                          onPublishNow={() => {
-                            setSelectedIds(new Set([deviation.id]));
-                            setShowPublishNowDialog(true);
-                          }}
-                          timezone={timezone}
+                        <Textarea
+                          value={bulkDescription}
+                          onChange={(e) => setBulkDescription(e.target.value)}
+                          placeholder="Enter description..."
+                          rows={6}
                         />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="calendar" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              ) : scheduledDeviations.length === 0 ? (
-                <div className="text-center text-muted-foreground p-12">
-                  <CalendarIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium mb-2">
-                    No scheduled deviations
-                  </p>
-                  <p className="text-sm mb-4">
-                    Schedule deviations from your drafts to see them here
-                  </p>
-                  <Button onClick={() => navigate("/draft")}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Go to Drafts
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDescriptionOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={handleBulkAssignDescription}>
+                            Apply
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <div className="h-4 w-px bg-border" />
+                  <Button
+                    onClick={() => setShowCancelDialog(true)}
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel Selected
                   </Button>
                 </div>
-              ) : (
-                <div className="fullcalendar-container">
-                  <FullCalendar
-                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    headerToolbar={{
-                      left: "prev,next today",
-                      center: "title",
-                      right: "dayGridMonth,timeGridWeek,timeGridDay",
-                    }}
-                    events={calendarEvents}
-                    eventClick={(info: EventClickArg) => {
-                      const deviation = info.event.extendedProps
-                        .deviation as Deviation;
-                      navigate(`/deviations/${deviation.id}`);
-                    }}
-                    dateClick={(info) => {
-                      const clickedDate = new Date(info.dateStr);
-                      const hasEvents = scheduledDeviations.some((dev) => {
-                        if (!dev.scheduledAt) return false;
-                        return (
-                          format(new Date(dev.scheduledAt), "yyyy-MM-dd") ===
-                          info.dateStr
-                        );
-                      });
+                <Button
+                  onClick={() => setShowPublishNowDialog(true)}
+                  size="sm"
+                  className="h-8"
+                >
+                  <Zap className="h-4 w-4 mr-2" />
+                  Publish Now
+                </Button>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-                      if (hasEvents) {
-                        setSelectedDate(clickedDate);
-                        setSheetOpen(true);
-                      }
-                    }}
-                    height="auto"
-                    contentHeight={700}
-                    eventTimeFormat={{
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      meridiem: false,
-                    }}
-                    slotLabelFormat={{
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      meridiem: false,
-                    }}
-                    displayEventTime={true}
-                    displayEventEnd={false}
-                    eventDisplay="block"
-                    dayMaxEvents={3}
-                    moreLinkClick={(info) => {
-                      setSelectedDate(info.date);
-                      setSheetOpen(true);
-                      return "popover";
-                    }}
-                  />
+      {/* Table */}
+      <Card className="flex-1 flex flex-col min-h-0 rounded-lg overflow-hidden">
+        <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : scheduledDeviations.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">No scheduled deviations</p>
+                <p className="text-sm">
+                  Schedule deviations from your drafts to see them here
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Table wrapperClassName="flex-1 min-h-0">
+                <TableHeader className="sticky top-0 z-10 bg-card">
+                  <TableRow className="border-b border-border hover:bg-transparent">
+                    <TableHead className="w-12 pl-4 bg-card text-center">
+                      <Checkbox
+                        checked={
+                          selectedIds.size === scheduledDeviations.length &&
+                          scheduledDeviations.length > 0
+                        }
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead className="w-16 bg-card">Preview</TableHead>
+                    <TableHead className="bg-card">Title</TableHead>
+                    <TableHead className="bg-card">Tags</TableHead>
+                    <TableHead className="bg-card">Description</TableHead>
+                    <TableHead className="bg-card">Folders</TableHead>
+                    <TableHead className="bg-card">Schedule</TableHead>
+                    <TableHead className="pr-4 bg-card">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scheduledDeviations.map((deviation) => (
+                    <ScheduledTableRow
+                      key={deviation.id}
+                      deviation={deviation}
+                      isSelected={selectedIds.has(deviation.id)}
+                      onSelect={() => toggleSelect(deviation.id)}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+              {/* Load more trigger */}
+              <div ref={loadMoreRef} className="h-1" />
+              {isFetchingNextPage && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-      </PageContent>
+              {/* Footer status bar */}
+              <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-t bg-muted/30 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>
+                    {searchQuery
+                      ? `Showing ${scheduledDeviations.length} of ${allScheduled.length} loaded (${totalCount} total)`
+                      : `Showing ${allScheduled.length} of ${totalCount} scheduled`}
+                  </span>
+                </div>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5" />
+                    <span>{selectedIds.size} selected</span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Publish Now Confirmation Dialog */}
-      <AlertDialog
-        open={showPublishNowDialog}
-        onOpenChange={setShowPublishNowDialog}
-      >
+      <AlertDialog open={showPublishNowDialog} onOpenChange={setShowPublishNowDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Publish {selectedIds.size} deviation
-              {selectedIds.size > 1 ? "s" : ""} now?
+              Publish {selectedIds.size} deviation{selectedIds.size > 1 ? "s" : ""} now?
             </AlertDialogTitle>
             <AlertDialogDescription>
               This will bypass the schedule and publish immediately. The
@@ -943,8 +747,7 @@ export function Scheduled() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmBulkPublishNow}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => batchPublishNowMutation.mutate(Array.from(selectedIds))}
             >
               Publish Now
             </AlertDialogAction>
@@ -952,192 +755,43 @@ export function Scheduled() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Calendar Day Sheet - Shows deviations for selected date */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>
-              {selectedDate &&
-                selectedDate.toLocaleDateString(undefined, {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-            </SheetTitle>
-            <SheetDescription>
-              {selectedDateDeviations.length} deviation
-              {selectedDateDeviations.length > 1 ? "s" : ""} scheduled for this
-              day
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            {selectedDateDeviations.map((deviation) => {
-              const scheduledDate = deviation.scheduledAt
-                ? new Date(deviation.scheduledAt)
-                : null;
-              const timeUntil = scheduledDate
-                ? getTimeUntil(scheduledDate)
-                : null;
-
-              // Status logic: scheduled -> queued (T+1 hour) -> past due (T+1 hour+)
-              const now = new Date();
-              const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-              const isPastDue = scheduledDate
-                ? scheduledDate < oneHourAgo
-                : false;
-              const isQueued = scheduledDate
-                ? scheduledDate < now && scheduledDate >= oneHourAgo
-                : false;
-
-              return (
-                <div
-                  key={deviation.id}
-                  className="flex gap-4 p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                >
-                  {/* Thumbnail */}
-                  {deviation.files &&
-                  deviation.files.length > 0 &&
-                  deviation.files[0].storageUrl ? (
-                    <img
-                      src={deviation.files[0].storageUrl}
-                      alt={deviation.title}
-                      className="w-24 h-24 object-cover rounded flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-24 h-24 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                      <Upload className="h-12 w-12 text-muted-foreground" />
-                    </div>
-                  )}
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h4 className="font-medium truncate">
-                        {deviation.title}
-                      </h4>
-                      {isPastDue ? (
-                        <Badge
-                          variant="destructive"
-                          className="text-xs flex-shrink-0"
-                        >
-                          Past Due
-                        </Badge>
-                      ) : isQueued ? (
-                        <Badge
-                          variant="default"
-                          className="text-xs flex-shrink-0 bg-blue-500"
-                        >
-                          Queued
-                        </Badge>
-                      ) : timeUntil ? (
-                        <Badge
-                          variant="secondary"
-                          className="text-xs flex-shrink-0"
-                        >
-                          in {timeUntil}
-                        </Badge>
-                      ) : null}
-                    </div>
-
-                    {deviation.tags && deviation.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {deviation.tags.slice(0, 3).map((tag, idx) => (
-                          <Badge
-                            key={idx}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                        {deviation.tags.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{deviation.tags.length - 3}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-1 text-sm text-muted-foreground mb-3">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-3 w-3" />
-                        <span>
-                          {scheduledDate &&
-                            formatScheduleDateTimeShort(scheduledDate)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          navigate(`/deviations/${deviation.id}`);
-                          setSheetOpen(false);
-                        }}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          batchCancelMutation.mutate([deviation.id]);
-                          setSheetOpen(false);
-                        }}
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedIds(new Set([deviation.id]));
-                          setShowPublishNowDialog(true);
-                          setSheetOpen(false);
-                        }}
-                      >
-                        <Zap className="h-3 w-3 mr-1" />
-                        Publish Now
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SheetContent>
-      </Sheet>
-    </PageWrapper>
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Cancel {selectedIds.size} scheduled deviation{selectedIds.size > 1 ? "s" : ""}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move the selected deviations back to drafts. You can reschedule them later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Scheduled</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => batchCancelMutation.mutate(Array.from(selectedIds))}
+            >
+              Move to Drafts
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
 
-// Scheduled Row Component
-function ScheduledRow({
+// Scheduled Table Row Component
+function ScheduledTableRow({
   deviation,
-  index,
   isSelected,
   onSelect,
-  onView,
-  onCancel,
-  onPublishNow,
-  timezone,
 }: {
   deviation: Deviation;
-  index: number;
   isSelected: boolean;
   onSelect: () => void;
-  onView: () => void;
-  onCancel: () => void;
-  onPublishNow: () => void;
-  timezone: string;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
   const scheduledDate = deviation.scheduledAt
     ? new Date(deviation.scheduledAt)
     : null;
@@ -1151,45 +805,122 @@ function ScheduledRow({
     ? scheduledDate < now && scheduledDate >= oneHourAgo
     : false;
 
+  // Handle ESC key to close lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && lightboxOpen) {
+        setLightboxOpen(false);
+      }
+    };
+
+    if (lightboxOpen) {
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [lightboxOpen]);
+
+  const handleRowClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const interactiveElements = ['BUTTON', 'INPUT', 'TEXTAREA', 'A', 'LABEL'];
+    const isInteractive =
+      interactiveElements.includes(target.tagName) ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('textarea') ||
+      target.closest('a') ||
+      target.closest('[role="checkbox"]') ||
+      target.closest('[role="dialog"]') ||
+      target.closest('[role="menu"]') ||
+      target.closest('[data-radix-popper-content-wrapper]') ||
+      target.contentEditable === 'true' ||
+      target.closest('[contenteditable="true"]');
+
+    if (!isInteractive) {
+      onSelect();
+    }
+  };
+
   return (
-    <TableRow>
-      <TableCell>
+    <TableRow className="h-[68px] cursor-pointer" onClick={handleRowClick}>
+      {/* Checkbox */}
+      <TableCell className="py-1 pl-4 text-center">
         <Checkbox checked={isSelected} onCheckedChange={onSelect} />
       </TableCell>
-      <TableCell className="text-muted-foreground">{index}</TableCell>
-      <TableCell>
-        {deviation.files &&
-        deviation.files.length > 0 &&
-        deviation.files[0].storageUrl ? (
-          <img
-            src={deviation.files[0].storageUrl}
-            alt={deviation.title}
-            className="w-20 h-20 object-cover rounded"
-          />
-        ) : (
-          <div className="w-20 h-20 bg-muted rounded flex items-center justify-center">
-            <Upload className="h-10 w-10 text-muted-foreground" />
-          </div>
-        )}
-      </TableCell>
-      <TableCell>
-        <div className="font-medium">{deviation.title}</div>
-        {deviation.tags && deviation.tags.length > 0 && (
-          <div className="text-xs text-muted-foreground mt-1">
-            {deviation.tags.slice(0, 3).join(", ")}
-            {deviation.tags.length > 3 && ` +${deviation.tags.length - 3}`}
-          </div>
-        )}
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Clock className="h-3 w-3" />
-          <span className="text-sm">
-            {scheduledDate && formatScheduleDateTimeShort(scheduledDate)}
-          </span>
+
+      {/* Preview */}
+      <TableCell className="py-1">
+        <div
+          className="w-14 h-14 rounded overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => deviation.files?.[0]?.storageUrl && setLightboxOpen(true)}
+        >
+          {deviation.files && deviation.files.length > 0 && deviation.files[0].storageUrl ? (
+            <img
+              src={deviation.files[0].storageUrl}
+              alt={deviation.title}
+              className="w-full h-full object-cover object-center"
+            />
+          ) : (
+            <FileImage className="h-5 w-5 text-muted-foreground" />
+          )}
         </div>
       </TableCell>
-      <TableCell>
+
+      {/* Title */}
+      <TableCell className="py-1 max-w-[200px]">
+        <div className="font-medium truncate">{deviation.title}</div>
+      </TableCell>
+
+      {/* Tags */}
+      <TableCell className="py-1">
+        {deviation.tags && deviation.tags.length > 0 ? (
+          <span className="text-sm text-muted-foreground">
+            {deviation.tags.length} tag{deviation.tags.length !== 1 ? "s" : ""}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </TableCell>
+
+      {/* Description */}
+      <TableCell className="py-1">
+        {deviation.description ? (
+          <span className="text-sm text-muted-foreground">Has desc</span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </TableCell>
+
+      {/* Folders */}
+      <TableCell className="py-1">
+        {deviation.galleryIds && deviation.galleryIds.length > 0 ? (
+          <span className="text-sm text-muted-foreground">
+            {deviation.galleryIds.length} folder{deviation.galleryIds.length !== 1 ? "s" : ""}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </TableCell>
+
+      {/* Schedule */}
+      <TableCell className="py-1">
+        <span className="text-sm text-muted-foreground">
+          {scheduledDate && scheduledDate.toLocaleString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
+      </TableCell>
+
+      {/* Status */}
+      <TableCell className="py-1 pr-4">
         {isPastDue ? (
           <Badge variant="destructive" className="text-xs">
             Past Due
@@ -1204,19 +935,32 @@ function ScheduledRow({
           </Badge>
         ) : null}
       </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onView}>
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            <X className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onPublishNow}>
-            <Zap className="h-4 w-4" />
-          </Button>
-        </div>
-      </TableCell>
+
+      {/* Lightbox overlay - rendered via portal */}
+      {lightboxOpen &&
+        deviation.files?.[0]?.storageUrl &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <div className="relative max-w-full max-h-full">
+              <img
+                src={deviation.files[0].storageUrl}
+                alt={deviation.title}
+                className="max-w-full max-h-[95vh] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+                onClick={() => setLightboxOpen(false)}
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
     </TableRow>
   );
 }
@@ -1232,8 +976,8 @@ function getTimeUntil(date: Date): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0) return `${days} day${days > 1 ? "s" : ""}`;
-  if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""}`;
-  if (minutes > 0) return `${minutes} minute${minutes > 1 ? "s" : ""}`;
-  return "less than a minute";
+  if (days > 0) return `${days}d`;
+  if (hours > 0) return `${hours}h`;
+  if (minutes > 0) return `${minutes}m`;
+  return "<1m";
 }

@@ -22,19 +22,21 @@ import { useAuthStore } from "@/stores/auth";
 import "@/stores/whitelabel";
 
 // Layouts
-import { AppLayout } from "@/components/layouts/AppLayout";
+import { ScrollableLayout } from "@/components/ScrollableLayout";
+import { FixedLayout } from "@/components/FixedLayout";
 import { AuthLayout } from "@/components/layouts/AuthLayout";
 
 // Pages
 import { Login } from "@/pages/Login";
 import { Callback } from "@/pages/Callback";
+import { Dashboard } from "@/pages/Dashboard";
 import { EditDeviation } from "@/pages/EditDeviation";
 import { Draft } from "@/pages/Draft";
 import { Scheduled } from "@/pages/Scheduled";
 import { Published } from "@/pages/Published";
 import { Templates } from "@/pages/Templates";
 import { Settings } from "@/pages/Settings";
-import { Browse } from "@/pages/Browse";
+import { Inspiration } from "@/pages/Inspiration";
 import { Galleries } from "@/pages/Galleries";
 import { GalleryDetail } from "@/pages/GalleryDetail";
 import { ApiKeys } from "@/pages/ApiKeys";
@@ -66,53 +68,59 @@ function App() {
     <>
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/login" element={<Login />} />
         <Route element={<AuthLayout />}>
           <Route path="/callback" element={<Callback />} />
         </Route>
 
-        {/* Protected routes */}
+        {/* Protected routes with FixedLayout (pages with internal scrolling) */}
         <Route
           element={
             <ProtectedRoute>
-              <AppLayout />
+              <FixedLayout />
             </ProtectedRoute>
           }
         >
-          <Route path="/browse" element={<Browse />} />
           <Route path="/review" element={<Review />} />
-          <Route path="/automation" element={<AutomationList />} />
-          <Route path="/automation/:id" element={<AutomationDetail />} />
-          <Route path="/deviations/:id" element={<EditDeviation />} />
-          {/* Deviations section */}
           <Route path="/draft" element={<Draft />} />
           <Route path="/scheduled" element={<Scheduled />} />
           <Route path="/published" element={<Published />} />
-          {/* Redirect old routes */}
-          <Route path="/schedule" element={<Navigate to="/draft" replace />} />
-          <Route path="/queue" element={<Navigate to="/scheduled" replace />} />
-          <Route
-            path="/history"
-            element={<Navigate to="/published" replace />}
-          />
-          {/* Templates section */}
-          <Route path="/templates" element={<Templates />} />
-          {/* Exclusives section */}
           <Route path="/exclusives-queue" element={<ExclusivesQueue />} />
-          {/* Redirect old routes */}
-          <Route path="/price-presets" element={<Navigate to="/exclusives-queue" replace />} />
-          <Route path="/sale-queue" element={<Navigate to="/exclusives-queue" replace />} />
+        </Route>
+
+        {/* Protected routes with ScrollableLayout (pages that scroll naturally) */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <ScrollableLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/inspiration" element={<Inspiration />} />
+          <Route path="/automation" element={<AutomationList />} />
+          <Route path="/automation/:id" element={<AutomationDetail />} />
+          <Route path="/deviations/:id" element={<EditDeviation />} />
+          {/* Templates page */}
+          <Route path="/templates" element={<Templates />} />
+          {/* Legacy template routes redirect to new unified page */}
+          <Route path="/templates/tags" element={<Navigate to="/templates?tab=tags" replace />} />
+          <Route path="/templates/descriptions" element={<Navigate to="/templates?tab=descriptions" replace />} />
+          <Route path="/templates/prices" element={<Navigate to="/templates?tab=prices" replace />} />
           {/* Other routes */}
           <Route path="/settings" element={<Settings />} />
           <Route path="/api-keys" element={<ApiKeys />} />
           <Route path="/galleries" element={<Galleries />} />
           <Route path="/galleries/:id" element={<GalleryDetail />} />
-          {/* Redirect old activity route */}
-          <Route
-            path="/activity"
-            element={<Navigate to="/published" replace />}
-          />
+          {/* Redirect old routes */}
+          <Route path="/browse" element={<Navigate to="/inspiration" replace />} />
+          <Route path="/schedule" element={<Navigate to="/draft" replace />} />
+          <Route path="/queue" element={<Navigate to="/scheduled" replace />} />
+          <Route path="/history" element={<Navigate to="/published" replace />} />
+          <Route path="/price-presets" element={<Navigate to="/templates/prices" replace />} />
+          <Route path="/sale-queue" element={<Navigate to="/exclusives-queue" replace />} />
+          <Route path="/activity" element={<Navigate to="/published" replace />} />
         </Route>
 
         {/* Catch all */}
